@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Calorie Vision</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f1722 0%, #1a2634 100%);
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            color: #e2e8f0;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 2rem;
+            padding: 2rem;
+            box-shadow: 0 25px 45px rgba(0,0,0,0.3);
+        }
+        h1 {
+            text-align: center;
+            background: linear-gradient(135deg, #facc15, #3b82f6);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin-bottom: 0.5rem;
+        }
+        .sub {
+            text-align: center;
+            color: #94a3b8;
+            margin-bottom: 2rem;
+        }
+        .upload-area {
+            border: 2px dashed #3b82f6;
+            border-radius: 1.5rem;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: 0.2s;
+            background: rgba(59, 130, 246, 0.1);
+        }
+        .upload-area:hover {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: #60a5fa;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .upload-btn {
+            background: #3b82f6;
+            color: white;
+            padding: 10px 24px;
+            border-radius: 40px;
+            cursor: pointer;
+            display: inline-block;
+            font-weight: bold;
+            border: none;
+        }
+        .preview {
+            margin-top: 2rem;
+            text-align: center;
+        }
+        .result-image {
+            max-width: 100%;
+            border-radius: 1rem;
+            margin-top: 1rem;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        }
+        .nutrition-panel {
+            background: #0f172a;
+            border-radius: 1rem;
+            padding: 1.2rem;
+            margin-top: 1.5rem;
+        }
+        .total-calories {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #facc15;
+            text-align: center;
+        }
+        .detection-list {
+            list-style: none;
+            padding: 0;
+        }
+        .detection-list li {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 12px;
+            border-bottom: 1px solid #334155;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 1rem 0;
+            color: #94a3b8;
+        }
+        .error {
+            color: #ef4444;
+            text-align: center;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🍽️ AI Calorie Vision</h1>
+    <div class="sub">Upload a photo of your meal and let AI estimate the calories</div>
+    
+    <div class="upload-area" id="uploadArea">
+        <label class="upload-btn" for="imageInput">📸 Choose Image</label>
+        <input type="file" id="imageInput" accept="image/jpeg, image/png, image/jpg">
+        <p style="margin-top: 12px; font-size: 0.8rem;">Supports JPG, PNG (max 16MB)</p>
+    </div>
+    
+    <div class="loading" id="loadingMsg">⏳ Analyzing your meal... (this may take a few seconds)</div>
+    
+    <div class="preview" id="previewArea" style="display: none;">
+        <img class="result-image" id="resultImage" alt="Analyzed meal">
+        
+        <div class="nutrition-panel" id="nutritionPanel" style="display: none;">
+            <div class="total-calories" id="totalCalories"></div>
+            <hr style="border-color: #334155; margin: 1rem 0;">
+            <ul class="detection-list" id="detectionList"></ul>
+        </div>
+    </div>
+    
+    <div class="error" id="errorMsg"></div>
+</div>
+
+<script>
+    const fileInput = document.getElementById('imageInput');
+    const uploadArea = document.getElementById('uploadArea');
+    const previewArea = document.getElementById('previewArea');
+    const resultImage = document.getElementById('resultImage');
+    const nutritionPanel = document.getElementById('nutritionPanel');
+    const totalCaloriesSpan = document.getElementById('totalCalories');
+    const detectionList = document.getElementById('detectionList');
+    const loadingMsg = document.getElementById('loadingMsg');
+    const errorMsg = document.getElementById('errorMsg');
+    
+    fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        // Reset UI
+        previewArea.style.display = 'none';
+        nutritionPanel.style.display = 'none';
+        errorMsg.textContent = '';
+        loadingMsg.style.display = 'block';
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        try {
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+            
+            loadingMsg.style.display = 'none';
+            
+            if (response.ok && data.success) {
+                // Show annotated image
+                resultImage.src = data.annotated_image_url;
+                previewArea.style.display = 'block';
+                nutritionPanel.style.display = 'block';
+                
+                // Display total calories
+                totalCaloriesSpan.textContent = `🔥 Total Calories: ${data.total_calories} kcal`;
+                
+                // Display individual food items
+                detectionList.innerHTML = '';
+                data.detections.forEach(item => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `
+                        <span>🍔 ${item.name}</span>
+                        <span style="font-weight: bold; color: #facc15;">${item.calories} cal</span>
+                    `;
+                    detectionList.appendChild(li);
+                });
+                
+                if (data.detections.length === 0) {
+                    detectionList.innerHTML = '<li style="text-align: center;">No recognizable food items found. Try a clearer image!</li>';
+                }
+            } else {
+                errorMsg.textContent = `Error: ${data.error || 'Something went wrong'}`;
+            }
+        } catch (err) {
+            loadingMsg.style.display = 'none';
+            errorMsg.textContent = `Failed to connect to server: ${err.message}`;
+        }
+    });
+    
+    // Click on upload area triggers file input
+    uploadArea.addEventListener('click', (e) => {
+        if (e.target !== fileInput) {
+            fileInput.click();
+        }
+    });
+</script>
+</body>
+</html>
